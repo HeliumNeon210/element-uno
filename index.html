@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>元素UNO（プロトタイプ）</title>
+<style>
+  :root{--bg:#0b1220;--card-w:120px;--card-h:170px}
+  body{margin:0;background:linear-gradient(180deg,#071025 0%, #0b1220 100%);color:#eef;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,Arial}
+  .app{max-width:1100px;margin:20px auto;padding:18px}
+  header{display:flex;gap:12px;align-items:center}
+  h1{font-size:18px;margin:0}
+  .board{display:flex;gap:18px;margin-top:18px}
+  .zone{background:rgba(255,255,255,0.03);padding:12px;border-radius:10px;flex:1;min-height:220px}
+  .deck-area,.pile-area{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .controls{display:flex;gap:8px}
+  .card{width:var(--card-w);height:var(--card-h);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;cursor:pointer;border:3px solid rgba(255,255,255,0.06)}
+  .card.back{background:#111;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center}
+  .card .period{font-size:44px}
+  .hand{display:flex;gap:8px;overflow:auto;padding:8px}
+  .player-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .player-name{min-width:120px}
+  .small{font-size:12px;color:#cce}
+  .log{max-height:140px;overflow:auto;padding:8px;background:rgba(0,0,0,0.2);border-radius:8px}
+  .help{font-size:13px;line-height:1.4}
+  .palette{display:flex;gap:6px;flex-wrap:wrap}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  button{background:#1b6;padding:0.5em 0.8em;border:0;border-radius:6px;color:#052;cursor:pointer}
+  .muted{background:#444;color:#ddd}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>元素UNO — プロトタイプ（HTML/CSS/JS）</h1>
+    <div class="controls">
+      <button id="newBtn">新しいゲーム</button>
+      <button id="unoBtn" class="muted">UNO!</button>
+    </div>
+  </header>
+
+  <div class="board">
+    <div class="zone" style="flex:0.9">
+      <h2>中央（山札／場）</h2>
+      <div style="display:flex;gap:20px;align-items:center;">
+        <div class="deck-area">
+          <div id="deck" class="card back">Deck</div>
+          <div class="small">山札を引く</div>
+        </div>
+        <div class="pile-area">
+          <div id="pile" class="card" style="min-width:140px;min-height:200px">--</div>
+          <div class="small">現在の場札</div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:14px">プレイ順・情報</h3>
+      <div id="playersInfo"></div>
+      <h3 style="margin-top:10px">ログ</h3>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="zone" style="flex:0.9">
+      <h2>手札（あなた）</h2>
+      <div id="hand" class="hand"></div>
+      <div class="small">カードを押すと出す。山札は中央で押す。</div>
+
+      <h3 style="margin-top:12px">ルール・定義（重要）</h3>
+      <div class="help">
+        <strong>出せるカード：</strong>場札と同じ<strong>族</strong>（family）か、同じ<strong>周期</strong>（period）を持つカード1枚。複数同周期まとめ出し不可。特殊カード（ランタノイド等）は数値0扱い。
+        <div style="margin-top:8px"><strong>特殊効果（要点）</strong>
+          <ul>
+            <li><strong>イオン結合するとReverse：</strong>直前のカードとイオン結合関係にある（＝一方が金属、他方が非金属）場合、リバース（順序反転）。2人時はSkip効果となる。</li>
+            <li><strong>希ガス（NobleGas）：</strong>Skip（次プレーヤー1回休み）。2人時は自分連続プレイ（Skip相当）。</li>
+            <li><strong>ランタノイド（Lanthanoid）：</strong>Draw2（次プレーヤーは山札から2枚引き、手番終了）。効果は返せない。</li>
+            <li><strong>アクチノイド（Actinoid）：</strong>Draw4＋場の族を指定（出した人が選ぶ）。次プレーヤーは4枚引き手番終了。効果は返せない。</li>
+            <li><strong>共有結合（Covalent）：</strong>直前のカードと共有結合関係（＝両方非金属）なら、自分の手札から1枚を任意のプレーヤーに渡せる。</li>
+          </ul>
+        </div>
+        <div style="margin-top:8px"><strong>イオン／共有の判定について</strong>
+          <div class="small" style="margin-top:6px">この実装では各族に対して簡便な分類（metal / nonmetal / metalloid）を持ちます。<br>
+            ・<strong>イオン結合成立</strong>：一方が metal、もう一方が nonmetal のときと定義します（典型的に金属→陽イオン、非金属→陰イオン）。<br>
+            ・<strong>共有結合成立</strong>：両方が nonmetal のときと定義します（非金属同士で電子を共有）。
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:12px">色・族の凡例</h3>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- データ定義（小型プロトタイプ用）
+const FAMILIES = [
+  {id:'Alkali', name:'アルカリ金属', color:'#FF8A65', type:'metal'},
+  {id:'Alkaline', name:'アルカリ土類金属', color:'#FFD54F', type:'metal'},
+  {id:'Transition', name:'遷移金属', color:'#90CAF9', type:'metal'},
+  {id:'PostTransition', name:'後遷移金属', color:'#B39DDB', type:'metal'},
+  {id:'Metalloid', name:'準金属', color:'#A5D6A7', type:'metalloid'},
+  {id:'Nonmetal', name:'非金属', color:'#BDE0FE', type:'nonmetal'},
+  {id:'Halogen', name:'ハロゲン', color:'#FFCDD2', type:'nonmetal'},
+  {id:'NobleGas', name:'希ガス', color:'#C5CAE9', type:'nonmetal', special:'skip'},
+  {id:'Lanthanoid', name:'ランタノイド', color:'#F8BBD0', type:'metal', special:'draw2'},
+  {id:'Actinoid', name:'アクチノイド', color:'#CFD8DC', type:'metal', special:'draw4'}
+];
+
+// small set of example "elements" used as cards
+const ELEMENTS = [
+  {sym:'H', name:'Hydrogen', period:1, family:'Nonmetal'},
+  {sym:'He', name:'Helium', period:1, family:'NobleGas'},
+  {sym:'Li', name:'Lithium', period:2, family:'Alkali'},
+  {sym:'Be', name:'Beryllium', period:2, family:'Alkaline'},
+  {sym:'B', name:'Boron', period:2, family:'Metalloid'},
+  {sym:'C', name:'Carbon', period:2, family:'Nonmetal'},
+  {sym:'N', name:'Nitrogen', period:2, family:'Nonmetal'},
+  {sym:'O', name:'Oxygen', period:2, family:'Nonmetal'},
+  {sym:'F', name:'Fluorine', period:2, family:'Halogen'},
+  {sym:'Ne', name:'Neon', period:2, family:'NobleGas'},
+  {sym:'Na', name:'Sodium', period:3, family:'Alkali'},
+  {sym:'Mg', name:'Magnesium', period:3, family:'Alkaline'},
+  {sym:'Al', name:'Aluminium', period:3, family:'PostTransition'},
+  {sym:'Si', name:'Silicon', period:3, family:'Metalloid'},
+  {sym:'P', name:'Phosphorus', period:3, family:'Nonmetal'},
+  {sym:'S', name:'Sulfur', period:3, family:'Nonmetal'},
+  {sym:'Cl', name:'Chlorine', period:3, family:'Halogen'},
+  {sym:'Ar', name:'Argon', period:3, family:'NobleGas'},
+  {sym:'La', name:'Lanthanum', period:6, family:'Lanthanoid'},
+  {sym:'Ce', name:'Cerium', period:6, family:'Lanthanoid'},
+  {sym:'Ac', name:'Actinium', period:7, family:'Actinoid'}
+];
+
+// Utilities
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function clone(o){return JSON.parse(JSON.stringify(o))}
+
+// Build deck: for each element create numbered card (period number) and some duplicates to enlarge deck.
+function buildDeck(){
+  const deck=[];
+  ELEMENTS.forEach(el=>{
+    // numeric-like cards: create 2 copies for periods
+    for(let i=0;i<2;i++) deck.push({sym:el.sym,name:el.name,period:el.period,family:el.family, special: FAMILIES.find(f=>f.id===el.family)?.special || null});
+  });
+  // add extra neutral symbol-cards as wild-like? Not required by rules.
+  return shuffle(deck);
+}
+
+// Game state
+let game=null;
+function newGame(playerCount=3){
+  const deck=buildDeck();
+  game={
+    deck:deck,
+    pile:[],
+    players:[],
+    turn:0,
+    dir:1,
+    dealer:0,
+    log:[]
+  };
+  for(let i=0;i<playerCount;i++){
+    game.players.push({name:`Player ${i+1}`, hand:[] , declaredUno:false});
+  }
+  // dealer selection: each draws one hidden card, highest period wins. (simulate by pop)
+  const draws=[];
+  for(let i=0;i<playerCount;i++){ draws.push(game.deck.pop()); }
+  let maxIdx=0; for(let i=1;i<draws.length;i++) if((draws[i]?.period||0) > (draws[maxIdx]?.period||0)) maxIdx=i;
+  game.dealer = maxIdx;
+  game.turn = (game.dealer+1)%playerCount;
+  // deal 7 each
+  for(let i=0;i<7;i++) for(let p=0;p<playerCount;p++) game.players[p].hand.push(game.deck.pop());
+  // flip top to pile
+  game.pile.push(game.deck.pop());
+  logAdd(`ディーラーは ${game.players[game.dealer].name}（決定ロジック：一枚引いて最大の周期）。`);
+  update();
+}
+
+function logAdd(s){game.log.unshift(`${new Date().toLocaleTimeString()} ${s}`); if(game.log.length>200) game.log.pop();}
+
+// UI bindings
+const deckEl = document.getElementById('deck');
+const pileEl = document.getElementById('pile');
+const handEl = document.getElementById('hand');
+const playersInfo = document.getElementById('playersInfo');
+const logEl = document.getElementById('log');
+const legendEl = document.getElementById('legend');
+
+function renderLegend(){legendEl.innerHTML=''; FAMILIES.forEach(f=>{
+  const d=document.createElement('div'); d.style.padding='6px 8px'; d.style.borderRadius='6px'; d.style.background=f.color; d.style.color='#042'; d.style.fontWeight='700'; d.textContent=f.name; legendEl.appendChild(d);
+});}
+
+function renderHand(){handEl.innerHTML=''; const me = game.players[0]; me.hand.forEach((card,idx)=>{
+  const c = makeCardElement(card);
+  c.addEventListener('click',()=> playerPlayCard(0, idx));
+  handEl.appendChild(c);
+});}
+
+function makeCardElement(card){
+  const d=document.createElement('div'); d.className='card'; d.style.background = FAMILIES.find(f=>f.id===card.family)?.color || '#888';
+  d.innerHTML = `<div style="font-size:12px;opacity:0.9">${card.sym}</div><div class="period">${card.period||0}</div><div style="font-size:12px;opacity:0.9">${card.family}</div>`;
+  return d;
+}
+
+function renderPile(){const top = game.pile[game.pile.length-1]; pileEl.innerHTML=''; if(top){ const el=makeCardElement(top); pileEl.replaceWith(el); el.id='pile'; el.className='card'; el.style.minWidth='140px'; el.style.minHeight='200px'; pileEl = el; } else { pileEl.innerHTML='--'; }}
+
+function renderPlayers(){playersInfo.innerHTML=''; game.players.forEach((p,i)=>{
+  const r=document.createElement('div'); r.className='player-row'; r.innerHTML = `<div class="player-name">${p.name}${i===game.dealer? '（Dealer）':''}</div><div class="small">手札 ${p.hand.length}枚</div><div class="small">${i===game.turn? '▶ 次の手番':''}</div>`;
+  playersInfo.appendChild(r);
+});}
+
+function update(){ renderLegend(); renderHand(); renderPlayers(); renderPile(); logEl.innerHTML = game.log.map(l=>`<div>${l}</div>`).join(''); }
+
+// Gameplay logic helpers
+function canPlayOn(card, top){
+  if(!top) return true;
+  if(card.family === top.family) return true;
+  if(card.period === top.period) return true;
+  return false;
+}
+
+function isIonic(a,b){
+  // ionic if one metal and the other nonmetal
+  const fa = FAMILIES.find(f=>f.id===a.family);
+  const fb = FAMILIES.find(f=>f.id===b.family);
+  if(!fa||!fb) return false;
+  return (fa.type==='metal' && fb.type==='nonmetal') || (fa.type==='nonmetal' && fb.type==='metal');
+}
+function isCovalent(a,b){
+  const fa = FAMILIES.find(f=>f.id===a.family);
+  const fb = FAMILIES.find(f=>f.id===b.family);
+  if(!fa||!fb) return false;
+  return fa.type==='nonmetal' && fb.type==='nonmetal';
+}
+
+// Player tries to play card index
+function playerPlayCard(playerIndex, cardIndex){
+  if(playerIndex!==0){ alert('このUIはあなた(Player 1)操作用の簡易版です'); return; }
+  if(game.turn !== 0) { logAdd('まだあなたの番ではありません'); update(); return; }
+  const player = game.players[playerIndex];
+  const card = player.hand[cardIndex];
+  const top = game.pile[game.pile.length-1];
+  // If last action was draw and we only allowed playing drawn card, omitted here — simplified.
+  if(!canPlayOn(card, top)) { logAdd('そのカードは出せません'); update(); return; }
+  // play
+  player.hand.splice(cardIndex,1);
+  game.pile.push(card);
+  logAdd(`${player.name} が ${card.sym}（${card.family}, P${card.period}）を出した`);
+  // check UNO declaration
+  if(player.hand.length===1 && !player.declaredUno){ logAdd(`${player.name} はUNO宣言していません！（宣言忘れペナルティ：山札から2枚）`); drawCards(playerIndex,2); }
+  // handle special interactions relative to previous top
+  handleEffectsAfterPlay(card, top);
+  // check win
+  if(player.hand.length===0){ logAdd(`${player.name} は上がり！ゲームから抜けます。`); game.players.splice(playerIndex,1); if(game.players.length===1){ logAdd(`最後の敗者: ${game.players[0].name}`); update(); return; } if(playerIndex<=game.turn) game.turn = game.turn % game.players.length; }
+  advanceTurn(); update();
+}
+
+function handleEffectsAfterPlay(card, prev){
+  // Ionic -> reverse
+  if(prev && isIonic(prev, card)){
+    game.dir *= -1; logAdd('イオン結合成立：順序を反転（Reverse）');
+    // 2-player special: handled by advanceTurn
+  }
+  // Covalent -> give one
+  if(prev && isCovalent(prev, card)){
+    // allow current player to give one card to another player (simple prompt)
+    if(game.players.length>1){
+      const giver = game.players.findIndex(p=>p.hand.includes(card)===false); // poor but current player is previous actor
+      // In this prototype, prompt to choose recipient via window.prompt
+      const recipientNames = game.players.map((p,i)=>`${i}:${p.name}`).join(',');
+      const pick = prompt(`共有結合成立：他プレーヤーに手札を1枚渡せます。受取人を番号で選んでください。 ${recipientNames}`);
+      const r = parseInt(pick);
+      if(!Number.isNaN(r) && r>=0 && r<game.players.length){
+        // select card from current player's hand to transfer
+        const curIdx = game.players.findIndex(p=>p.name===game.players[0].name); // assume local player
+        if(game.players[curIdx] && game.players[curIdx].hand.length>0){
+          const giveCard = game.players[curIdx].hand.pop();
+          game.players[r].hand.push(giveCard);
+          logAdd(`${game.players[curIdx].name} が ${game.players[r].name} に ${giveCard.sym} を渡した（共有結合効果）`);
+        }
+      }
+    }
+  }
+  // Family-special effects
+  const fam = FAMILIES.find(f=>f.id===card.family);
+  if(fam?.special==='skip'){
+    logAdd('希ガスが出た：次プレーヤーをスキップ'); advanceTurn(2); // skip one
+  }
+  if(fam?.special==='draw2'){
+    const next = nextPlayerIndex(); logAdd('ランタノイド：次プレーヤーは2枚引く'); drawCards(next,2); // their turn ends
+    advanceTurn(1); // move to next after penalty
+  }
+  if(fam?.special==='draw4'){
+    const next = nextPlayerIndex(); // choose family to set as new active family
+    const familyChoice = prompt('アクチノイド：場の族を指定してください（例: Alkali, Nonmetal, NobleGas 等）');
+    if(FAMILIES.find(f=>f.id===familyChoice)){
+      // change top card's family artificially by placing a marker card
+      game.pile.push({sym:'(宣言)', name:'宣言', period:card.period, family:familyChoice});
+      logAdd(`場の族を ${familyChoice} に指定しました`);
+    }
+    logAdd('アクチノイド：次プレーヤーは4枚引く'); drawCards(next,4); advanceTurn(1);
+  }
+}
+
+function drawCards(playerIndex, n){
+  const p = game.players[playerIndex];
+  for(let i=0;i<n;i++){
+    if(game.deck.length===0) reshuffleFromPile();
+    const c = game.deck.pop(); if(!c) break; p.hand.push(c);
+  }
+  logAdd(`${p.name} は山札から ${n} 枚引いた`);
+}
+
+function reshuffleFromPile(){
+  const top = game.pile.pop(); const rest = shuffle(game.pile); game.deck = rest; game.pile = [top]; logAdd('山札が尽きたため場札以外をシャッフルして山札にした');
+}
+
+function nextPlayerIndex(from=game.turn){
+  const len = game.players.length; return (from + game.dir + len) % len;
+}
+
+function advanceTurn(steps=1){
+  if(game.players.length<=1) return;
+  for(let i=0;i<steps;i++){
+    game.turn = nextPlayerIndex(game.turn);
+  }
+}
+
+// deck click: draw
+document.getElementById('newBtn').addEventListener('click',()=> newGame(3));
+deckEl.addEventListener('click',()=>{
+  if(!game) return;
+  if(game.deck.length===0) reshuffleFromPile();
+  if(game.turn !== 0){ logAdd('あなたの番ではないので山札を引けません'); update(); return; }
+  const c = game.deck.pop(); game.players[0].hand.push(c); logAdd(`あなたは山札を1枚引いた: ${c.sym}`);
+  // if drawn card playable, allow immediate play (ask)
+  const top = game.pile[game.pile.length-1]; if(canPlayOn(c, top)){
+    if(confirm('引いたカードは出せます。今すぐ出しますか？')){
+      // play last card in hand
+      playerPlayCard(0, game.players[0].hand.length-1);
+      return;
+    }
+  }
+  advanceTurn(); update();
+});
+
+// UNO button
+document.getElementById('unoBtn').addEventListener('click',()=>{
+  if(!game) return;
+  const me = game.players[0]; if(me.hand.length===1){ me.declaredUno=true; logAdd('あなたはUNOを宣言した'); } else { logAdd('UNO宣言は手札が1枚のときのみ有効'); }
+  update();
+});
+
+// init
+newGame(3);
+</script>
+</body>
+</html>
